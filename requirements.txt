@@ -1,0 +1,7 @@
+feedparser>=6.0
+requests>=2.31
+google-genai>=1.0
+pyyaml>=6.0
+matplotlib>=3.7
+seaborn>=0.13
+pytest>=7.0

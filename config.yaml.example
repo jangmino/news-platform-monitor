@@ -1,0 +1,88 @@
+# API 인증 정보 (환경 변수로도 설정 가능: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, GEMINI_API_KEY)
+api:
+  naver:
+    client_id: "YOUR_NAVER_CLIENT_ID"
+    client_secret: "YOUR_NAVER_CLIENT_SECRET"
+  gemini:
+    api_key: "YOUR_GEMINI_API_KEY"
+    model: "gemini-2.5-flash-lite"
+
+# RSS 피드 소스 (정책브리핑 korea.kr)
+rss_sources:
+  공정거래: "https://www.korea.kr/rss/policy.do?dept_id=138"
+  소비자보호: "https://www.korea.kr/rss/policy.do?dept_id=145"
+  개인정보: "https://www.korea.kr/rss/policy.do?dept_id=N04"
+  노동: "https://www.korea.kr/rss/policy.do?dept_id=115"
+  콘텐츠/저작권: "https://www.korea.kr/rss/policy.do?dept_id=113"
+  안전: "https://www.korea.kr/rss/policy.do?dept_id=116"
+  AI/자동화: "https://www.korea.kr/rss/policy.do?dept_id=122"
+
+# 뉴스 검색 키워드
+search_keywords:
+  - "플랫폼 규제"
+  - "공정거래"
+  - "개인정보"
+  - "플랫폼 노동"
+  - "저작권"
+  - "AI 규제"
+  - "온라인 플랫폼법"
+  - "배달앱 수수료"
+  - "플랫폼 독과점"
+
+# 플랫폼명 사전
+platforms:
+  domestic:
+    - "네이버"
+    - "카카오"
+    - "쿠팡"
+    - "배달의민족"
+    - "요기요"
+    - "당근"
+    - "토스"
+    - "야놀자"
+    - "무신사"
+    - "직방"
+    - "오늘의집"
+    - "카카오모빌리티"
+    - "네이버쇼핑"
+  foreign:
+    - "구글"
+    - "유튜브"
+    - "메타"
+    - "인스타그램"
+    - "페이스북"
+    - "틱톡"
+    - "아마존"
+    - "테무"
+    - "알리익스프레스"
+    - "우버"
+    - "넷플릭스"
+    - "오픈AI"
+
+# 기관명 사전
+institutions:
+  - "공정거래위원회"
+  - "개인정보보호위원회"
+  - "방송통신위원회"
+  - "과학기술정보통신부"
+  - "문화체육관광부"
+  - "고용노동부"
+  - "행정안전부"
+  - "식품의약품안전처"
+  - "국회"
+  - "산업통상자원부"
+
+# 정책 영역
+policy_domains:
+  - "공정거래"
+  - "소비자보호"
+  - "개인정보"
+  - "노동"
+  - "콘텐츠/저작권"
+  - "안전"
+  - "AI/자동화"
+
+# 리스크 평가 설정
+risk:
+  threshold: 70
+  trending_ratio: 2.0
