@@ -34,7 +34,9 @@ cp config.yaml.example config.yaml
 `config.yaml`에서 API 키를 설정하세요:
 
 - **Naver API**: https://developers.naver.com 에서 애플리케이션 등록 후 Client ID/Secret 입력
-- **Gemini API**: https://aistudio.google.com 에서 API 키 발급 후 입력
+- **Gemini API**: 아래 가이드 참고
+  - 운영 담당자(KISDI): [docs/gemini-api-setup.md](docs/gemini-api-setup.md) — 본인 키 발급 및 설정 절차
+  - 개발자: [docs/dev-gemini-api-guide.md](docs/dev-gemini-api-guide.md) — 전달받은 개발용 키 사용 방법
 
 환경 변수로도 설정 가능:
 ```bash
