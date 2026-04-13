@@ -46,6 +46,54 @@ def cmd_report(args):
     run_report()
 
 
+def cmd_analyze_press(args):
+    """보도자료 전용 LLM 분석 + 정책 제언 생성."""
+    from src.analyzers.press_analyzer import run_press_analysis
+    from src.analyzers.recommendation_generator import generate_recommendations
+    import json, os, tempfile
+    from pathlib import Path
+
+    print("=== 보도자료 LLM 분석 ===")
+    result = run_press_analysis(force=args.force)
+    if not result:
+        return
+
+    print("\n=== AI 정책 제언 생성 ===")
+    recs = generate_recommendations(result)
+
+    if recs:
+        result["policy_recommendations"] = recs
+        result["_rec_analyzed_count"] = result.get("analyzed_count", 0)
+
+        # atomic write (재저장)
+        from src.utils.file_io import analyzed_dir, ensure_dir
+        output_path = analyzed_dir() / "press_analysis.json"
+        ensure_dir(output_path.parent)
+        fd, tmp_path = tempfile.mkstemp(dir=output_path.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, output_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        # dashboard 복사
+        project_root = Path(__file__).resolve().parents[1]
+        dst = project_root / "dashboard" / "public" / "data" / "press_analysis.json"
+        if dst.parent.exists():
+            import shutil
+            shutil.copy2(output_path, dst)
+            print(f"대시보드 복사 완료: {dst}")
+
+    analyzed = result.get("analyzed_count", 0)
+    total = result.get("total_count", 0)
+    print(f"\n완료: {analyzed}/{total}건 분석, 정책 제언 {len(recs)}개")
+
+
 def cmd_run_all(args):
     """전체 파이프라인 실행."""
     print("========== 전체 파이프라인 실행 ==========\n")
@@ -137,6 +185,11 @@ def main():
     # run-all
     p_run_all = subparsers.add_parser("run-all", help="전체 파이프라인 실행")
     p_run_all.set_defaults(func=cmd_run_all)
+
+    # analyze-press
+    p_analyze_press = subparsers.add_parser("analyze-press", help="보도자료 LLM 분석 + 정책 제언 생성")
+    p_analyze_press.add_argument("--force", action="store_true", help="이미 분석된 항목도 재분석")
+    p_analyze_press.set_defaults(func=cmd_analyze_press)
 
     # status
     p_status = subparsers.add_parser("status", help="상태 확인")

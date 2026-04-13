@@ -29,4 +29,18 @@ Python 3.10+: Follow standard conventions
 - 001-platform-monitor-pipeline: Added Python 3.10+ + feedparser, requests, google-genai, pyyaml, matplotlib, seaborn
 
 <!-- MANUAL ADDITIONS START -->
+## spec-003: LLM 분석 + 대시보드 (003-llm-analysis-dashboard)
+
+**분석 파이프라인** (Python, 기존 구조 유지)
+- `src/analyzers/press_analyzer.py` — Gemini API 기반 보도자료 분석
+- `src/analyzers/recommendation_generator.py` — 정책 제언 생성
+- `python -m src analyze-press` 로 실행
+- 출력: `data/analyzed/press_analysis.json` (canonical) + `dashboard/public/data/press_analysis.json` (복사)
+
+**웹 대시보드** (`dashboard/` 디렉토리, 완전히 분리된 프로젝트)
+- Bun + Vite + React + TypeScript + shadcn/ui + Recharts
+- `cd dashboard && bun run dev` 로 실행 (포트 5173)
+- `fetch('/data/press_analysis.json')` 으로 분석 결과 읽기 전용 접근
+- 히트맵: HTML table + Tailwind (Recharts 네이티브 히트맵 없음)
+- 키워드 클라우드: span + 인라인 font-size (외부 라이브러리 없음)
 <!-- MANUAL ADDITIONS END -->

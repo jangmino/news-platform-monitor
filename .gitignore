@@ -23,3 +23,8 @@ Thumbs.db
 .idea/
 *.swp
 *.tmp
+
+# Dashboard
+dashboard/node_modules/
+dashboard/dist/
+dashboard/public/data/press_analysis.json
