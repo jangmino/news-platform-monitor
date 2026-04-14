@@ -29,6 +29,13 @@ class Article:
     institution_tags: list[str] = field(default_factory=list)
     file_info: Optional[FileInfo] = None
 
+    # 뉴스 수집 확장 필드
+    link: Optional[str] = None
+    originallink: Optional[str] = None
+    description: str = ""
+    query_used: str = ""
+    category: str = ""
+
     def to_dict(self) -> dict:
         d = {
             "id": self.id,
@@ -43,6 +50,11 @@ class Article:
             "platform_tags": self.platform_tags,
             "institution_tags": self.institution_tags,
             "file_info": None,
+            "link": self.link,
+            "originallink": self.originallink,
+            "description": self.description,
+            "query_used": self.query_used,
+            "category": self.category,
         }
         if self.file_info:
             d["file_info"] = {
@@ -69,4 +81,9 @@ class Article:
             platform_tags=d.get("platform_tags", []),
             institution_tags=d.get("institution_tags", []),
             file_info=file_info,
+            link=d.get("link"),
+            originallink=d.get("originallink"),
+            description=d.get("description", ""),
+            query_used=d.get("query_used", ""),
+            category=d.get("category", ""),
         )
