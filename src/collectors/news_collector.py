@@ -48,11 +48,28 @@ def build_query_to_category(config: dict) -> dict[str, str]:
                 query_to_category[kw] = category
         return query_to_category
 
-    # fallback
     for kw in config.get("search_keywords", []):
         query_to_category[kw] = ""
 
     return query_to_category
+
+
+def _to_news_dict(article: Article) -> dict:
+    """press 구조와 맞춘 뉴스 저장용 dict."""
+    return {
+        "title": article.title,
+        "date": article.published_at,
+        "source_type": "news",
+        "category": article.category,
+        "link": article.link or article.url,
+        "originallink": article.originallink,
+        "content": article.content,          # 초기에는 description
+        "description": article.description,
+        "file_info": None,
+        "query_used": article.query_used,
+        "platform_tags": article.platform_tags,
+        "institution_tags": article.institution_tags,
+    }
 
 
 def collect_news(config: dict | None = None) -> list[Article]:
@@ -69,8 +86,6 @@ def collect_news(config: dict | None = None) -> list[Article]:
         return []
 
     query_to_category = build_query_to_category(config)
-    print("DEBUG news_query_categories =", config.get("news_query_categories"))
-    print("DEBUG query_to_category =", query_to_category)
     if not query_to_category:
         print("검색 키워드가 설정되지 않았습니다.")
         return []
@@ -110,9 +125,9 @@ def collect_news(config: dict | None = None) -> list[Article]:
                 article = Article(
                     id=generate_id(canonical_url),
                     title=title,
-                    content=description,  # 초기값은 description
+                    content=description,      # 초기값은 description
                     url=canonical_url,
-                    source_type="naver_api",
+                    source_type="news",
                     source_name="Naver 뉴스",
                     published_at=pub_date,
                     search_keywords=[query],
@@ -125,7 +140,7 @@ def collect_news(config: dict | None = None) -> list[Article]:
                 query_articles.append(article)
 
             save_path = raw_news_dir() / f"{query}.json"
-            save_json([a.to_dict() for a in query_articles], save_path)
+            save_json([_to_news_dict(a) for a in query_articles], save_path)
 
             print(f"{len(query_articles)}건")
             all_articles.extend(query_articles)

@@ -47,10 +47,9 @@ def enrich_news_bodies(articles: list[Article], sleep_sec: float = 0.3) -> list[
     success = 0
     fail = 0
 
-    for i, article in enumerate(articles, start=1):
-        if article.source_type != "naver_api":
-            continue
+    news_articles = [a for a in articles if a.source_type == "news"]
 
+    for i, article in enumerate(news_articles, start=1):
         body = None
         target_url = article.link or article.url
 
@@ -68,6 +67,6 @@ def enrich_news_bodies(articles: list[Article], sleep_sec: float = 0.3) -> list[
     print("\n[본문 수집 결과]")
     print(f"성공: {success}개")
     print(f"실패: {fail}개")
-    print(f"전체: {sum(1 for a in articles if a.source_type == 'naver_api')}개")
+    print(f"전체: {len(news_articles)}개")
 
     return articles
