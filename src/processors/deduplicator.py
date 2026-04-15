@@ -1,28 +1,43 @@
-"""URL 기반 중복 제거기."""
+"""뉴스/보도자료 중복 제거기."""
 
 from __future__ import annotations
 
 from src.models.article import Article
 
 
+def dedup_key(article: Article) -> str:
+    return article.originallink or article.link or article.url or article.title
+
+
 def deduplicate(articles: list[Article]) -> list[Article]:
-    """URL 기반으로 중복 기사를 제거하고, 키워드 태그를 병합한다."""
     seen: dict[str, Article] = {}
 
     for article in articles:
-        if article.url in seen:
-            # 키워드 병합
-            existing = seen[article.url]
-            merged_keywords = list(set(
+        key = dedup_key(article)
+
+        if key in seen:
+            existing = seen[key]
+
+            existing.search_keywords = list(set(
                 existing.search_keywords + article.search_keywords
             ))
-            existing.search_keywords = merged_keywords
+
+            if article.category and article.category not in existing.category.split(","):
+                if existing.category:
+                    existing.category = ",".join(
+                        sorted(set(existing.category.split(",") + [article.category]))
+                    )
+                else:
+                    existing.category = article.category
         else:
-            seen[article.url] = article
+            seen[key] = article
 
     deduped = list(seen.values())
     removed = len(articles) - len(deduped)
+
     if removed > 0:
-        print(f"  중복 제거: {removed}건 제거, {len(deduped)}건 유지")
+        print(f"중복 제거 후 기사 수: {len(deduped)} (제거 {removed}건)")
+    else:
+        print(f"중복 제거 후 기사 수: {len(deduped)}")
 
     return deduped

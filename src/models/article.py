@@ -20,7 +20,7 @@ class Article:
     title: str
     content: str
     url: str  # 중복 판별 기준
-    source_type: str  # "rss" | "naver_api"
+    source_type: str
     source_name: str  # 출처 기관명
     published_at: str  # 게시일
     collected_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -28,6 +28,13 @@ class Article:
     platform_tags: list[str] = field(default_factory=list)
     institution_tags: list[str] = field(default_factory=list)
     file_info: Optional[FileInfo] = None
+
+    # 뉴스 수집 확장 필드
+    link: Optional[str] = None
+    originallink: Optional[str] = None
+    description: str = ""
+    query_used: str = ""
+    category: str = ""
 
     def to_dict(self) -> dict:
         d = {
@@ -43,6 +50,11 @@ class Article:
             "platform_tags": self.platform_tags,
             "institution_tags": self.institution_tags,
             "file_info": None,
+            "link": self.link,
+            "originallink": self.originallink,
+            "description": self.description,
+            "query_used": self.query_used,
+            "category": self.category,
         }
         if self.file_info:
             d["file_info"] = {
@@ -56,17 +68,37 @@ class Article:
     def from_dict(cls, d: dict) -> "Article":
         fi = d.get("file_info")
         file_info = FileInfo(**fi) if fi else None
+
+        # 공통 필드/호환 처리
+        source_type = d.get("source_type", "news")
+        title = d.get("title", "")
+        content = d.get("content", "")
+        category = d.get("category", "")
+        link = d.get("link")
+        originallink = d.get("originallink")
+        description = d.get("description", content)
+        query_used = d.get("query_used", "")
+        published_at = d.get("published_at") or d.get("date", "")
+        canonical_url = d.get("url") or originallink or link or ""
+        source_name = d.get("source_name", "Naver 뉴스" if source_type == "news" else "RSS")
+        article_id = d.get("id") or canonical_url or title
+
         return cls(
-            id=d["id"],
-            title=d["title"],
-            content=d["content"],
-            url=d["url"],
-            source_type=d["source_type"],
-            source_name=d["source_name"],
-            published_at=d["published_at"],
+            id=article_id,
+            title=title,
+            content=content,
+            url=canonical_url,
+            source_type=source_type,
+            source_name=source_name,
+            published_at=published_at,
             collected_at=d.get("collected_at", ""),
             search_keywords=d.get("search_keywords", []),
             platform_tags=d.get("platform_tags", []),
             institution_tags=d.get("institution_tags", []),
             file_info=file_info,
+            link=link,
+            originallink=originallink,
+            description=description,
+            query_used=query_used,
+            category=category,
         )

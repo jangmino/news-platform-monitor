@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 import time
-
 import requests
 
 from src.config import load_config
 from src.models.article import Article
-from src.utils.file_io import load_json, save_json, raw_news_dir
+from src.utils.file_io import save_json, raw_news_dir
 from src.utils.text_utils import generate_id, normalize_text
-
 
 _API_URL = "https://openapi.naver.com/v1/search/news.json"
 _MAX_DISPLAY = 100
-_MAX_START = 901  # start 최대 1000, display=100이면 901까지
+_NAVER_NEWS_PREFIX = "https://n.news.naver.com/"
 
 
 def _fetch_news(query: str, client_id: str, client_secret: str,
                 display: int = 100, start: int = 1) -> dict:
-    """Naver 뉴스 검색 API를 호출한다."""
     headers = {
         "X-Naver-Client-Id": client_id,
         "X-Naver-Client-Secret": client_secret,
@@ -35,8 +32,48 @@ def _fetch_news(query: str, client_id: str, client_secret: str,
     return response.json()
 
 
+def is_naver_news_link(url: str) -> bool:
+    if not url:
+        return False
+    return url.startswith(_NAVER_NEWS_PREFIX)
+
+
+def build_query_to_category(config: dict) -> dict[str, str]:
+    query_to_category: dict[str, str] = {}
+
+    query_categories = config.get("news_query_categories", {})
+    if query_categories:
+        for category, keywords in query_categories.items():
+            for kw in keywords:
+                query_to_category[kw] = category
+        return query_to_category
+
+    for kw in config.get("search_keywords", []):
+        query_to_category[kw] = ""
+
+    return query_to_category
+
+
+def _to_news_dict(article: Article) -> dict:
+    """press 구조와 맞춘 뉴스 저장용 dict."""
+    return {
+        "title": article.title,
+        "date": article.published_at,
+        "source_type": "news",
+        "category": article.category,
+        "link": article.link or article.url,
+        "originallink": article.originallink,
+        "content": article.content,          # 초기에는 description
+        "description": article.description,
+        "file_info": None,
+        "query_used": article.query_used,
+        "platform_tags": article.platform_tags,
+        "institution_tags": article.institution_tags,
+    }
+
+
 def collect_news(config: dict | None = None) -> list[Article]:
-    """정책 키워드별로 Naver 뉴스를 수집한다."""
+    """카테고리별 query 기준으로 네이버 뉴스 제휴 기사만 수집한다."""
     if config is None:
         config = load_config()
 
@@ -48,70 +85,72 @@ def collect_news(config: dict | None = None) -> list[Article]:
         print("Naver API 인증 정보가 설정되지 않았습니다. config.yaml을 확인하세요.")
         return []
 
-    keywords = config.get("search_keywords", [])
-    if not keywords:
+    query_to_category = build_query_to_category(config)
+    if not query_to_category:
         print("검색 키워드가 설정되지 않았습니다.")
         return []
 
-    all_articles = []
+    all_articles: list[Article] = []
     total_api_calls = 0
 
-    for keyword in keywords:
-        print(f"  [{keyword}] 수집 중... ", end="")
-        keyword_articles = []
+    print("네이버 뉴스 제휴 기사만 필터링")
+
+    for query, category in query_to_category.items():
+        print(f"  [{query} / {category}] 수집 중... ", end="")
+        query_articles: list[Article] = []
 
         try:
-            for start in range(1, _MAX_START + 1, _MAX_DISPLAY):
-                # API 한도 체크 (보수적)
-                if total_api_calls >= 24000:
-                    print("\nAPI 일일 호출 한도에 근접합니다. 수집을 중단합니다.")
-                    break
+            data = _fetch_news(
+                query,
+                client_id,
+                client_secret,
+                display=_MAX_DISPLAY,
+                start=1,
+            )
+            total_api_calls += 1
 
-                data = _fetch_news(keyword, client_id, client_secret,
-                                   display=_MAX_DISPLAY, start=start)
-                total_api_calls += 1
+            items = data.get("items", [])
+            for item in items:
+                link = item.get("link", "")
+                if not is_naver_news_link(link):
+                    continue
 
-                items = data.get("items", [])
-                if not items:
-                    break
+                originallink = item.get("originallink") or ""
+                canonical_url = originallink or link
 
-                for item in items:
-                    url = item.get("originallink") or item.get("link", "")
-                    if not url:
-                        continue
+                title = normalize_text(item.get("title", ""))
+                description = normalize_text(item.get("description", ""))
+                pub_date = item.get("pubDate", "")
 
-                    title = normalize_text(item.get("title", ""))
-                    description = normalize_text(item.get("description", ""))
-                    pub_date = item.get("pubDate", "")
+                article = Article(
+                    id=generate_id(canonical_url),
+                    title=title,
+                    content=description,      # 초기값은 description
+                    url=canonical_url,
+                    source_type="news",
+                    source_name="Naver 뉴스",
+                    published_at=pub_date,
+                    search_keywords=[query],
+                    link=link,
+                    originallink=originallink,
+                    description=description,
+                    query_used=query,
+                    category=category,
+                )
+                query_articles.append(article)
 
-                    article = Article(
-                        id=generate_id(url),
-                        title=title,
-                        content=description,
-                        url=url,
-                        source_type="naver_api",
-                        source_name="Naver 뉴스",
-                        published_at=pub_date,
-                        search_keywords=[keyword],
-                    )
-                    keyword_articles.append(article)
+            save_path = raw_news_dir() / f"{query}.json"
+            save_json([_to_news_dict(a) for a in query_articles], save_path)
 
-                # 결과가 display보다 적으면 마지막 페이지
-                if len(items) < _MAX_DISPLAY:
-                    break
-
-                time.sleep(0.1)  # API rate limiting
+            print(f"{len(query_articles)}건")
+            all_articles.extend(query_articles)
+            time.sleep(0.1)
 
         except requests.RequestException as e:
             print(f"API 오류: {e}")
             continue
 
-        # 키워드별 저장
-        save_path = raw_news_dir() / f"{keyword}.json"
-        save_json([a.to_dict() for a in keyword_articles], save_path)
+    print(f"\n네이버 뉴스 필터링 후 수집된 기사 수: {len(all_articles)}")
+    print(f"API 호출 수: {total_api_calls}")
 
-        print(f"{len(keyword_articles)}건")
-        all_articles.extend(keyword_articles)
-
-    print(f"\n뉴스 수집 완료: 총 {len(all_articles)}건, API 호출 {total_api_calls}회")
     return all_articles
