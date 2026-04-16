@@ -1,10 +1,11 @@
 # news-platform-monitor Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-05
+Auto-generated from all feature plans. Last updated: 2026-04-16
 
 ## Active Technologies
 - Python 3.10+ + feedparser, requests, beautifulsoup4 (신규), pymupdf (신규), odfpy (신규), pyyaml (기존 유지) (002-integrate-press-data)
 - 로컬 파일 시스템 (JSON) — 기존 방식 유지 (002-integrate-press-data)
+- Python 3.10+ (백엔드), TypeScript / React 18 (대시보드) + google-genai (기존), Recharts (기존), shadcn/ui Badge (기존) (004-extend-news-analysis)
 
 - Python 3.10+ + feedparser, requests, google-genai, pyyaml, matplotlib, seaborn (001-platform-monitor-pipeline)
 
@@ -24,6 +25,7 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.10+: Follow standard conventions
 
 ## Recent Changes
+- 004-extend-news-analysis: Added Python 3.10+ (백엔드), TypeScript / React 18 (대시보드) + google-genai (기존), Recharts (기존), shadcn/ui Badge (기존)
 - 002-integrate-press-data: Added Python 3.10+ + feedparser, requests, beautifulsoup4 (신규), pymupdf (신규), odfpy (신규), pyyaml (기존 유지)
 
 - 001-platform-monitor-pipeline: Added Python 3.10+ + feedparser, requests, google-genai, pyyaml, matplotlib, seaborn

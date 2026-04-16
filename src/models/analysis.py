@@ -18,7 +18,7 @@ class Analysis:
     policy_confidence: float
     analyzed_at: str = field(default_factory=lambda: datetime.now().isoformat())
     model_used: str = ""
-    status: str = "completed"  # "completed" | "failed" | "skipped"
+    status: str = "analyzed"  # "analyzed" | "failed" | "skipped"
     error_message: Optional[str] = None
 
     def to_dict(self) -> dict:

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import tempfile
 from pathlib import Path
 
 
@@ -34,6 +37,36 @@ def save_text(text: str, path: Path) -> None:
     ensure_dir(path.parent)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
+
+
+def atomic_write(data: list | dict, path: Path) -> None:
+    """데이터를 JSON으로 원자적으로 저장한다 (tmpfile → os.replace)."""
+    ensure_dir(path.parent)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def copy_to_dashboard(src: Path, filename: str) -> None:
+    """분석 결과를 대시보드 public/data/ 에 복사한다.
+
+    dashboard 디렉토리가 없으면 조용히 건너뛴다.
+    """
+    project_root = Path(__file__).resolve().parents[2]
+    dst_dir = project_root / "dashboard" / "public" / "data"
+    if not dst_dir.exists():
+        return
+    dst = dst_dir / filename
+    shutil.copy2(src, dst)
+    print(f"대시보드 복사 완료: {dst}")
 
 
 # 데이터 경로 헬퍼

@@ -22,36 +22,22 @@ def cmd_preprocess(args):
     """전처리 (중복 제거 + 태깅)."""
     from src.processors import run_preprocess
     print("=== 전처리 ===")
-    run_preprocess()
+    run_preprocess(news_only=args.news_only)
 
 
 def cmd_analyze(args):
-    """LLM 분석 (요약, 감성, 정책 분류)."""
-    from src.analyzers.gemini_analyzer import run_analysis
-    print("=== LLM 분석 ===")
-    run_analysis(force=args.force)
+    """보도자료(RSS) LLM 분석."""
+    from src.analyzers.press_analyzer import run_press_analysis
+    print("=== 보도자료 LLM 분석 ===")
+    run_press_analysis(force=args.force)
 
-
-def cmd_score(args):
-    """리스크 스코어링."""
-    from src.scorers import run_scoring
-    print("=== 리스크 스코어링 ===")
-    run_scoring()
-
-
-def cmd_report(args):
-    """브리핑 리포트 생성."""
-    from src.reporters import run_report
-    print("=== 브리핑 리포트 생성 ===")
-    run_report()
 
 
 def cmd_analyze_press(args):
     """보도자료 전용 LLM 분석 + 정책 제언 생성."""
     from src.analyzers.press_analyzer import run_press_analysis
     from src.analyzers.recommendation_generator import generate_recommendations
-    import json, os, tempfile
-    from pathlib import Path
+    from src.utils.file_io import analyzed_dir, atomic_write, copy_to_dashboard
 
     print("=== 보도자료 LLM 분석 ===")
     result = run_press_analysis(force=args.force)
@@ -65,43 +51,98 @@ def cmd_analyze_press(args):
         result["policy_recommendations"] = recs
         result["_rec_analyzed_count"] = result.get("analyzed_count", 0)
 
-        # atomic write (재저장)
-        from src.utils.file_io import analyzed_dir, ensure_dir
         output_path = analyzed_dir() / "press_analysis.json"
-        ensure_dir(output_path.parent)
-        fd, tmp_path = tempfile.mkstemp(dir=output_path.parent, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(result, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, output_path)
-        except Exception:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
-
-        # dashboard 복사
-        project_root = Path(__file__).resolve().parents[1]
-        dst = project_root / "dashboard" / "public" / "data" / "press_analysis.json"
-        if dst.parent.exists():
-            import shutil
-            shutil.copy2(output_path, dst)
-            print(f"대시보드 복사 완료: {dst}")
+        atomic_write(result, output_path)
+        copy_to_dashboard(output_path, "press_analysis.json")
 
     analyzed = result.get("analyzed_count", 0)
     total = result.get("total_count", 0)
     print(f"\n완료: {analyzed}/{total}건 분석, 정책 제언 {len(recs)}개")
 
 
+def cmd_analyze_news(args):
+    """뉴스 전용 LLM 분석."""
+    from src.analyzers.news_analyzer import run_news_analysis
+
+    print("=== 뉴스 LLM 분석 ===")
+    result = run_news_analysis(force=args.force)
+    if not result:
+        return
+
+    analyzed = result.get("analyzed_count", 0)
+    total = result.get("total_count", 0)
+    print(f"\n완료: {analyzed}/{total}건 분석")
+
+
+def cmd_generate_recommendations(args):
+    """보도자료 + 뉴스 통합 정책 제언 생성."""
+    from src.analyzers.recommendation_generator import generate_combined_recommendations
+    from src.utils.file_io import analyzed_dir, atomic_write, copy_to_dashboard
+    import json, datetime
+
+    analyzed = analyzed_dir()
+    press_path = analyzed / "press_analysis.json"
+    news_path = analyzed / "news_analysis.json"
+
+    if not press_path.exists():
+        print("press_analysis.json 없음 — 먼저 analyze-press 를 실행하세요.")
+        return
+
+    with open(press_path, encoding="utf-8") as f:
+        press_analysis = json.load(f)
+
+    news_analysis: dict = {}
+    if news_path.exists():
+        with open(news_path, encoding="utf-8") as f:
+            news_analysis = json.load(f)
+    else:
+        print("news_analysis.json 없음 — 보도자료만 사용하여 통합 제언 생성")
+
+    press_analyzed = press_analysis.get("analyzed_count", 0)
+    news_analyzed = news_analysis.get("analyzed_count", 0)
+
+    # 재생성 조건 확인: 기존 combined_recommendations.json의 source_counts와 비교
+    combined_path = analyzed / "combined_recommendations.json"
+    if combined_path.exists() and not args.force:
+        with open(combined_path, encoding="utf-8") as f:
+            existing = json.load(f)
+        existing_counts = existing.get("source_counts", {})
+        if (
+            existing_counts.get("press") == press_analyzed
+            and existing_counts.get("news") == news_analyzed
+            and existing.get("policy_recommendations")
+        ):
+            print(
+                f"통합 제언 재사용 (보도자료 {press_analyzed}건 + 뉴스 {news_analyzed}건 변동 없음)"
+            )
+            return
+
+    print("=== 통합 정책 제언 생성 ===")
+    recs = generate_combined_recommendations(press_analysis, news_analysis)
+    if not recs:
+        print("정책 제언 생성 실패")
+        return
+
+    result = {
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "source_counts": {"press": press_analyzed, "news": news_analyzed},
+        "policy_recommendations": recs,
+    }
+
+    atomic_write(result, combined_path)
+    copy_to_dashboard(combined_path, "combined_recommendations.json")
+
+    print(f"\n완료: 정책 제언 {len(recs)}개 (보도자료 {press_analyzed}건 + 뉴스 {news_analyzed}건 기반)")
+
+
 def cmd_run_all(args):
     """전체 파이프라인 실행."""
     print("========== 전체 파이프라인 실행 ==========\n")
-    cmd_collect(argparse.Namespace(rss=False, news=False))
-    cmd_preprocess(argparse.Namespace())
+    cmd_collect(argparse.Namespace(rss=True, news=True))
+    cmd_preprocess(argparse.Namespace(news_only=True))
     cmd_analyze(argparse.Namespace(force=False))
-    cmd_score(argparse.Namespace())
-    cmd_report(argparse.Namespace())
+    cmd_analyze_news(argparse.Namespace(force=False))
+    cmd_generate_recommendations(argparse.Namespace(force=False))
     print("\n========== 파이프라인 완료 ==========")
 
 
@@ -167,20 +208,13 @@ def main():
 
     # preprocess
     p_preprocess = subparsers.add_parser("preprocess", help="전처리")
-    p_preprocess.set_defaults(func=cmd_preprocess)
+    p_preprocess.add_argument("--all", dest="news_only", action="store_false", help="RSS 보도자료 + 뉴스 전체 전처리")
+    p_preprocess.set_defaults(func=cmd_preprocess, news_only=True)
 
-    # analyze
-    p_analyze = subparsers.add_parser("analyze", help="LLM 분석")
+    # analyze-rss
+    p_analyze = subparsers.add_parser("analyze-rss", help="보도자료(RSS) LLM 분석")
     p_analyze.add_argument("--force", action="store_true", help="이미 분석된 항목도 재분석")
     p_analyze.set_defaults(func=cmd_analyze)
-
-    # score
-    p_score = subparsers.add_parser("score", help="리스크 스코어링")
-    p_score.set_defaults(func=cmd_score)
-
-    # report
-    p_report = subparsers.add_parser("report", help="브리핑 리포트 생성")
-    p_report.set_defaults(func=cmd_report)
 
     # run-all
     p_run_all = subparsers.add_parser("run-all", help="전체 파이프라인 실행")
@@ -190,6 +224,16 @@ def main():
     p_analyze_press = subparsers.add_parser("analyze-press", help="보도자료 LLM 분석 + 정책 제언 생성")
     p_analyze_press.add_argument("--force", action="store_true", help="이미 분석된 항목도 재분석")
     p_analyze_press.set_defaults(func=cmd_analyze_press)
+
+    # analyze-news
+    p_analyze_news = subparsers.add_parser("analyze-news", help="뉴스 LLM 분석")
+    p_analyze_news.add_argument("--force", action="store_true", help="이미 분석된 항목도 재분석")
+    p_analyze_news.set_defaults(func=cmd_analyze_news)
+
+    # generate-recommendations
+    p_gen_recs = subparsers.add_parser("generate-recommendations", help="보도자료 + 뉴스 통합 정책 제언 생성")
+    p_gen_recs.add_argument("--force", action="store_true", help="이미 생성된 제언도 재생성")
+    p_gen_recs.set_defaults(func=cmd_generate_recommendations)
 
     # status
     p_status = subparsers.add_parser("status", help="상태 확인")
