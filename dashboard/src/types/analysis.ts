@@ -1,15 +1,20 @@
 export type Sentiment = "긍정" | "부정" | "중립";
 export type AnalysisStatus = "analyzed" | "failed" | "skipped" | "parse_error";
+export type SourceFilter = "all" | "press" | "news";
 
 export interface AnalyzedArticle {
-  // 원본 press_data 필드
+  // 원본 press_data 필드 (보도자료)
   title: string;
-  date: string;
-  link: string;
-  content: string;
-  dept: string;
-  category: string;
-  source_type?: string;
+  date?: string;          // 보도자료 날짜 (press)
+  published_at?: string;  // 뉴스 기사 날짜 (news)
+  link?: string;
+  originallink?: string;  // 뉴스 원문 URL (news)
+  description?: string;   // 뉴스 패시지 (news)
+  content?: string;       // 보도자료 본문 (press)
+  dept?: string;          // 보도자료 부처 (press)
+  category?: string;
+  source_type: "press" | "news";
+  source_name?: string;
   file_info?: unknown;
 
   // Gemini 분석 결과
@@ -35,6 +40,24 @@ export interface PressAnalysis {
   analyzed_count: number;
   articles: AnalyzedArticle[];
   policy_recommendations: PolicyRecommendation[];
+}
+
+export interface NewsAnalysis {
+  generated_at: string;
+  total_count: number;
+  analyzed_count: number;
+  articles: AnalyzedArticle[];
+}
+
+export interface CombinedRecommendations {
+  generated_at: string;
+  source_counts: { press: number; news: number };
+  policy_recommendations: PolicyRecommendation[];
+}
+
+export interface MediaOutletCount {
+  domain: string;
+  count: number;
 }
 
 // 집계 결과 타입

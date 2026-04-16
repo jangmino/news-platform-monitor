@@ -16,18 +16,19 @@ from src.utils.file_io import (
 )
 
 
-def run_preprocess(config: dict | None = None) -> list[Article]:
+def run_preprocess(config: dict | None = None, news_only: bool = False) -> list[Article]:
     if config is None:
         config = load_config()
 
     all_articles: list[Article] = []
 
-    rss_dir = raw_rss_dir()
-    if rss_dir.exists():
-        for f in rss_dir.glob("*.json"):
-            data = load_json(f)
-            if isinstance(data, list):
-                all_articles.extend([Article.from_dict(d) for d in data])
+    if not news_only:
+        rss_dir = raw_rss_dir()
+        if rss_dir.exists():
+            for f in rss_dir.glob("*.json"):
+                data = load_json(f)
+                if isinstance(data, list):
+                    all_articles.extend([Article.from_dict(d) for d in data])
 
     news_dir = raw_news_dir()
     if news_dir.exists():

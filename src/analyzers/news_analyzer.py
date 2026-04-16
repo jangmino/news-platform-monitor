@@ -1,8 +1,8 @@
-"""보도자료 전용 Gemini 분석기.
+"""뉴스 기사 전용 Gemini 분석기.
 
-press_data.json → press_analysis.json (embedded 분석 결과)
+data/processed/articles.json → news_analysis.json (embedded 분석 결과)
 - 플랫폼 추출, 정책영역 분류, 리스크 점수, 키워드, 요약, 감성, 신뢰도
-- 증분 분석: link 기준 기존 결과 재사용
+- 증분 분석: id 기준 기존 결과 재사용 (없으면 link/url 대체)
 - Atomic write: tmpfile → rename
 - 완료 후 dashboard/public/data/ 에 복사
 """
@@ -10,6 +10,7 @@ press_data.json → press_analysis.json (embedded 분석 결과)
 from __future__ import annotations
 
 import json
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -18,19 +19,19 @@ from google import genai
 
 from src.config import load_config
 from src.utils.file_io import (
-    load_json, ensure_dir, raw_rss_dir, analyzed_dir,
+    load_json, ensure_dir, processed_dir, analyzed_dir,
     atomic_write, copy_to_dashboard,
 )
 
 
-_MIN_CONTENT_LENGTH = 50  # 이 미만이면 skipped
+_MIN_CONTENT_LENGTH = 30  # title+description 합산 기준
 
-_PROMPT = """다음 보도자료를 분석하세요. 반드시 원문에 있는 내용만 기반으로 하고, 원문에 없는 내용을 추가하지 마세요.
+_PROMPT = """다음 뉴스 기사를 분석하세요. 반드시 원문에 있는 내용만 기반으로 하고, 원문에 없는 내용을 추가하지 마세요.
 
-## 제목
+## 기사 제목
 {title}
 
-## 본문
+## 기사 요약
 {content}
 
 ## 분석 요청
@@ -62,6 +63,23 @@ keywords는 최대 5개, 본문 핵심 주제어를 추출하세요.
 sentiment: "긍정" / "부정" / "중립" 중 하나.
 confidence: 전체 분석 신뢰도 0.0~1.0.
 """
+
+
+def _clean_html(text: str) -> str:
+    """HTML 태그를 제거한다."""
+    return re.sub(r"<[^>]+>", "", text).strip()
+
+
+def _build_input_text(article: dict) -> str:
+    """분석 입력 텍스트를 구성한다 (title + content, 최대 600자)."""
+    title = _clean_html(article.get("title", ""))
+    content = _clean_html(article.get("content", ""))
+    return (title + "\n" + content)[:600]
+
+
+def _dedup_key(article: dict) -> str:
+    """증분 분석용 중복 판별 키를 반환한다."""
+    return article.get("id") or article.get("link") or article.get("url", "")
 
 
 def _parse_response(text: str) -> dict | None:
@@ -131,13 +149,16 @@ def _analyze_single(
     valid_platforms: list[str],
     valid_domains: list[str],
 ) -> dict:
-    """단일 보도자료를 분석하여 분석 필드를 반환한다."""
+    """단일 뉴스 기사를 분석하여 분석 필드를 반환한다."""
     all_platforms = ", ".join(valid_platforms)
     all_domains = ", ".join(valid_domains)
 
+    input_text = _build_input_text(article)
+    title = _clean_html(article.get("title", ""))
+
     prompt = _PROMPT.format(
-        title=article.get("title", ""),
-        content=article.get("content", "")[:2000],
+        title=title,
+        content=input_text,
         platforms=all_platforms,
         domains=all_domains,
     )
@@ -161,15 +182,14 @@ def _analyze_single(
     validated = _validate_result(result, valid_platforms, valid_domains)
     validated["status"] = "analyzed"
     validated["raw_response"] = None
-    validated["source_type"] = "press"
     return validated
 
 
-def run_press_analysis(config: dict | None = None, force: bool = False) -> dict:
-    """보도자료 JSON을 Gemini API로 분석하고 결과를 저장한다.
+def run_news_analysis(config: dict | None = None, force: bool = False) -> dict:
+    """뉴스 기사 JSON을 Gemini API로 분석하고 결과를 저장한다.
 
     Returns:
-        press_analysis dict (저장된 데이터와 동일)
+        news_analysis dict (저장된 데이터와 동일)
     """
     if config is None:
         config = load_config()
@@ -189,26 +209,26 @@ def run_press_analysis(config: dict | None = None, force: bool = False) -> dict:
     valid_domains: list[str] = config.get("policy_domains", [])
 
     # 입력 로드
-    input_path = raw_rss_dir() / "press_data.json"
+    input_path = processed_dir() / "articles.json"
+    if not input_path.exists():
+        print("전처리 데이터가 없습니다. 먼저 'python -m src collect --news && python -m src preprocess'를 실행하세요.")
+        return {}
+
     articles: list[dict] = load_json(input_path)  # type: ignore
     if not articles:
-        print("분석할 보도자료가 없습니다. 먼저 collect를 실행하세요.")
+        print("분석할 뉴스 기사가 없습니다. 먼저 collect를 실행하세요.")
         return {}
 
     # 기존 분석 결과 로드 (증분 분석용)
-    output_path = analyzed_dir() / "press_analysis.json"
-    existing: dict = {}              # link → analyzed_article (캐시)
-    existing_recs: list = []         # 이전 정책 제언 (재사용)
-    existing_rec_count: int | None = None  # 제언 생성 시점의 analyzed_count
+    output_path = analyzed_dir() / "news_analysis.json"
+    existing: dict = {}  # dedup_key → analyzed_article (캐시)
     if not force and output_path.exists():
         try:
             existing_data = json.loads(output_path.read_text(encoding="utf-8"))
             for a in existing_data.get("articles", []):
-                # analyzed / skipped 만 캐시에 보존 — failed / parse_error 는 재시도
-                if a.get("link") and a.get("status") in ("analyzed", "skipped"):
-                    existing[a["link"]] = a
-            existing_recs = existing_data.get("policy_recommendations", [])
-            existing_rec_count = existing_data.get("_rec_analyzed_count")
+                key = _dedup_key(a)
+                if key and a.get("status") in ("analyzed", "skipped"):
+                    existing[key] = a
         except (json.JSONDecodeError, KeyError):
             pass
 
@@ -221,34 +241,37 @@ def run_press_analysis(config: dict | None = None, force: bool = False) -> dict:
     skip_count = 0
 
     total = len(articles)
-    print(f"보도자료 {total}건 중 분석 시작 (기존 캐시: {len(existing)}건)")
+    print(f"뉴스 기사 {total}건 중 분석 시작 (기존 캐시: {len(existing)}건)")
 
     for i, article in enumerate(articles, 1):
-        link = article.get("link", "")
+        key = _dedup_key(article)
 
         # 증분: 이미 분석된 항목
-        if link and link in existing and not force:
-            analyzed_articles.append(existing[link])
+        if key and key in existing and not force:
+            analyzed_articles.append(existing[key])
             continue
 
-        # 본문 길이 체크
-        content = article.get("content", "")
-        if len(content) < _MIN_CONTENT_LENGTH:
-            result_article = {**article, "platforms": [], "policy_domains": [],
-                              "risk_score": 0, "keywords": [], "summary": "",
-                              "sentiment": "중립", "confidence": 0.0,
-                              "status": "skipped", "raw_response": None,
-                              "source_type": "press"}
+        # 입력 텍스트 길이 체크
+        input_text = _build_input_text(article)
+        if len(input_text) < _MIN_CONTENT_LENGTH:
+            result_article = {
+                **article,
+                "platforms": [], "policy_domains": [],
+                "risk_score": 0, "keywords": [], "summary": "",
+                "sentiment": "중립", "confidence": 0.0,
+                "status": "skipped", "raw_response": None,
+                "source_type": "news",
+            }
             analyzed_articles.append(result_article)
             skip_count += 1
             continue
 
-        title_preview = article.get("title", "")[:45]
+        title_preview = _clean_html(article.get("title", ""))[:45]
         print(f"  [{i}/{total}] {title_preview}... ", end="", flush=True)
 
         try:
             analysis = _analyze_single(client, model, article, valid_platforms, valid_domains)
-            result_article = {**article, **analysis}
+            result_article = {**article, **analysis, "source_type": "news"}
             analyzed_articles.append(result_article)
 
             if analysis["status"] == "analyzed":
@@ -259,11 +282,14 @@ def run_press_analysis(config: dict | None = None, force: bool = False) -> dict:
                 print("파싱 오류")
 
         except Exception as e:
-            result_article = {**article, "platforms": [], "policy_domains": [],
-                              "risk_score": 0, "keywords": [], "summary": "",
-                              "sentiment": "중립", "confidence": 0.0,
-                              "status": "failed", "raw_response": str(e)[:200],
-                              "source_type": "press"}
+            result_article = {
+                **article,
+                "platforms": [], "policy_domains": [],
+                "risk_score": 0, "keywords": [], "summary": "",
+                "sentiment": "중립", "confidence": 0.0,
+                "status": "failed", "raw_response": str(e)[:200],
+                "source_type": "news",
+            }
             analyzed_articles.append(result_article)
             fail_count += 1
             print(f"오류: {e}")
@@ -277,10 +303,7 @@ def run_press_analysis(config: dict | None = None, force: bool = False) -> dict:
         "total_count": len(analyzed_articles),
         "analyzed_count": analyzed_count,
         "articles": analyzed_articles,
-        "policy_recommendations": existing_recs,
     }
-    if existing_rec_count is not None:
-        output["_rec_analyzed_count"] = existing_rec_count
 
     # atomic write
     atomic_write(output, output_path)
@@ -288,6 +311,6 @@ def run_press_analysis(config: dict | None = None, force: bool = False) -> dict:
     print(f"신규 분석 {new_count}건 | 실패 {fail_count}건 | 스킵 {skip_count}건 | 총 완료 {analyzed_count}건")
 
     # dashboard 복사
-    copy_to_dashboard(output_path, "press_analysis.json")
+    copy_to_dashboard(output_path, "news_analysis.json")
 
     return output

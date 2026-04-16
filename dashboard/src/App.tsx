@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAnalysisData } from "@/hooks/useAnalysisData";
 import { Section1Overview } from "@/components/Section1Overview";
 import { Section2Trends } from "@/components/Section2Trends";
 import { Section3Keywords } from "@/components/Section3Keywords";
 import { Section4Platforms } from "@/components/Section4Platforms";
 import { filterByDateRange } from "@/lib/dataUtils";
-
 const DATE_RANGE_OPTIONS: { label: string; days: number | null }[] = [
   { label: "전체", days: null },
   { label: "최근 7일", days: 7 },
@@ -14,9 +13,36 @@ const DATE_RANGE_OPTIONS: { label: string; days: number | null }[] = [
 ];
 
 export default function App() {
-  const { data, isLoading, error } = useAnalysisData();
+  const {
+    pressArticles,
+    newsArticles,
+    combinedRecs,
+    pressRecs,
+    pressGeneratedAt,
+    newsGeneratedAt,
+    isLoading,
+    error,
+  } = useAnalysisData();
+
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<number | null>(null);
+
+  const activeRecs = combinedRecs.length > 0 ? combinedRecs : pressRecs;
+
+  const filteredArticles = useMemo(() => {
+    const base = [...pressArticles, ...newsArticles];
+    return filterByDateRange(base, dateRange);
+  }, [pressArticles, newsArticles, dateRange]);
+
+  const totalCount = pressArticles.length + newsArticles.length;
+  const analyzedCount = filteredArticles.filter((a) => a.status === "analyzed").length;
+  const isEmpty = totalCount === 0;
+
+  // 가장 최근 생성 시각 표시
+  const generatedAt = [pressGeneratedAt, newsGeneratedAt]
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? "";
 
   if (isLoading) {
     return (
@@ -40,10 +66,6 @@ export default function App() {
     );
   }
 
-  const isEmpty = !data || data.total_count === 0;
-  const articles = data ? filterByDateRange(data.articles, dateRange) : [];
-  const filteredCount = articles.filter((a) => a.status === "analyzed").length;
-
   return (
     <div className="min-h-screen bg-background">
       {/* 헤더 */}
@@ -54,29 +76,33 @@ export default function App() {
             <p className="text-xs text-muted-foreground">디지털 플랫폼 정책 모니터링</p>
           </div>
 
-          {/* 날짜 범위 필터 */}
           {!isEmpty && (
-            <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg p-1">
-              {DATE_RANGE_OPTIONS.map(({ label, days }) => (
-                <button
-                  key={label}
-                  onClick={() => setDateRange(days)}
-                  className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                    dateRange === days
-                      ? "bg-slate-600 text-white font-medium"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* 날짜 범위 필터 */}
+              <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg p-1">
+                {DATE_RANGE_OPTIONS.map(({ label, days }) => (
+                  <button
+                    key={label}
+                    onClick={() => setDateRange(days)}
+                    className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                      dateRange === days
+                        ? "bg-slate-600 text-white font-medium"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          {data && !isEmpty && (
+          {!isEmpty && (
             <div className="text-right text-xs text-muted-foreground">
-              <p>{filteredCount.toLocaleString()} / {data.total_count.toLocaleString()}건 분석</p>
-              <p>{new Date(data.generated_at).toLocaleDateString("ko-KR")} 기준</p>
+              <p>{analyzedCount.toLocaleString()} / {totalCount.toLocaleString()}건 분석</p>
+              {generatedAt && (
+                <p>{new Date(generatedAt).toLocaleDateString("ko-KR")} 기준</p>
+              )}
             </div>
           )}
         </div>
@@ -89,22 +115,22 @@ export default function App() {
         ) : (
           <div className="space-y-12">
             <Section1Overview
-              articles={articles}
-              totalCount={data!.total_count}
-              analyzedCount={filteredCount}
-              generatedAt={data!.generated_at}
-              recommendations={data!.policy_recommendations}
+              articles={filteredArticles}
+              totalCount={totalCount}
+              analyzedCount={analyzedCount}
+              generatedAt={generatedAt}
+              recommendations={activeRecs}
               selectedPlatform={selectedPlatform}
               onPlatformSelect={setSelectedPlatform}
             />
             <hr className="border-slate-800" />
-            <Section2Trends articles={articles} />
+            <Section2Trends articles={filteredArticles} />
             <hr className="border-slate-800" />
-            <Section3Keywords articles={articles} />
+            <Section3Keywords articles={filteredArticles} />
             <hr className="border-slate-800" />
             <Section4Platforms
-              articles={articles}
-              recommendations={data!.policy_recommendations}
+              articles={filteredArticles}
+              recommendations={activeRecs}
               selectedPlatform={selectedPlatform}
               onPlatformSelect={setSelectedPlatform}
             />
@@ -124,7 +150,7 @@ function EmptyState() {
         먼저 Python 분석 파이프라인을 실행하세요.
       </p>
       <pre className="mt-2 px-4 py-3 bg-slate-800 rounded text-xs text-left font-mono text-slate-200">
-        python -m src analyze-press
+        python -m src analyze-press{"\n"}python -m src analyze-news
       </pre>
       <p className="text-xs text-muted-foreground">
         완료 후 이 페이지를 새로고침하세요.

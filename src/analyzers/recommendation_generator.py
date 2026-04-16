@@ -4,6 +4,9 @@
 정책 제언 3개(title + description)를 생성한다.
 
 재생성 조건: analyzed_count가 이전 생성 시점과 달라진 경우만.
+
+`generate_combined_recommendations(press_analysis, news_analysis)` 는
+보도자료 + 뉴스를 합산하여 통합 제언을 생성한다.
 """
 
 from __future__ import annotations
@@ -143,3 +146,64 @@ def generate_recommendations(
     except Exception as e:
         print(f" 오류: {e} — 기존 제언 유지")
         return existing_recs
+
+
+def generate_combined_recommendations(
+    press_analysis: dict,
+    news_analysis: dict,
+    config: dict | None = None,
+) -> list[dict]:
+    """보도자료 + 뉴스 통합 정책 제언 3개를 생성하여 반환한다.
+
+    재생성 조건: 이전 combined_recommendations.json의 source_counts와
+    현재 analyzed_count 합계가 다를 때.
+
+    반환: policy_recommendations 리스트 (caller가 파일 저장 담당)
+    """
+    if config is None:
+        config = load_config()
+
+    press_articles = press_analysis.get("articles", [])
+    news_articles = news_analysis.get("articles", [])
+    all_articles = press_articles + news_articles
+
+    press_analyzed = press_analysis.get("analyzed_count", 0)
+    news_analyzed = news_analysis.get("analyzed_count", 0)
+
+    if press_analyzed + news_analyzed == 0:
+        print("분석 완료 기사가 없어 통합 정책 제언을 생성할 수 없습니다.")
+        return []
+
+    gemini_cfg = config.get("api", {}).get("gemini", {})
+    api_key = gemini_cfg.get("api_key", "")
+    model = gemini_cfg.get("model", "gemini-2.5-flash-lite")
+
+    if not api_key or api_key.startswith("YOUR_"):
+        print("Gemini API 키 미설정 — 통합 정책 제언 생성 건너뜀")
+        return []
+
+    context = _build_context(all_articles)
+    if not context:
+        return []
+
+    print(
+        f"AI 통합 정책 제언 생성 중 (보도자료 {press_analyzed}건 + 뉴스 {news_analyzed}건)...",
+        end="",
+        flush=True,
+    )
+
+    client = genai.Client(api_key=api_key)
+    prompt = _RECOMMENDATION_PROMPT.format(context=context)
+
+    try:
+        response = client.models.generate_content(model=model, contents=prompt)
+        recs = _parse_recommendations(response.text)
+        if recs:
+            print(f" {len(recs)}개 생성 완료")
+            return recs
+        else:
+            print(" 파싱 실패")
+            return []
+    except Exception as e:
+        print(f" 오류: {e}")
+        return []
