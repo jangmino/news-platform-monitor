@@ -4,12 +4,18 @@ import type {
   DailyTrendPoint,
   HeatmapCell,
   KeywordFrequency,
+  MediaOutletCount,
   PlatformCard,
 } from "@/types/analysis";
 
 /** 분석 완료 기사만 필터링 */
 function analyzed(articles: AnalyzedArticle[]): AnalyzedArticle[] {
   return articles.filter((a) => a.status === "analyzed");
+}
+
+/** 기사의 날짜 문자열 반환 — press: date, news: published_at 순으로 확인 */
+function articleDate(a: AnalyzedArticle): string {
+  return a.date ?? a.published_at ?? "";
 }
 
 /** ISO "YYYY-MM-DD" 변환 (RFC 2822 등 다양한 형식 대응) */
@@ -31,8 +37,9 @@ export function filterByDateRange(
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   return articles.filter((a) => {
-    if (!a.date) return false;
-    const d = new Date(a.date);
+    const ds = articleDate(a);
+    if (!ds) return false;
+    const d = new Date(ds);
     return !isNaN(d.getTime()) && d >= cutoff;
   });
 }
@@ -136,7 +143,7 @@ export function buildDailyTrend(articles: AnalyzedArticle[]): DailyTrendPoint[] 
   const countMap = new Map<string, number>();
 
   for (const a of analyzed(articles)) {
-    const date = toISODate(a.date);
+    const date = toISODate(articleDate(a));
     countMap.set(date, (countMap.get(date) ?? 0) + 1);
   }
 
@@ -157,7 +164,7 @@ export function buildBubbleClusters(articles: AnalyzedArticle[]): BubbleCluster[
     for (const kw of a.keywords) {
       if (!map.has(kw)) map.set(kw, { dates: [], risks: [], domains: [] });
       const entry = map.get(kw)!;
-      const iso = toISODate(a.date);
+      const iso = toISODate(articleDate(a));
       if (iso !== "unknown") entry.dates.push(iso);
       entry.risks.push(a.risk_score);
       entry.domains.push(...a.policy_domains);
@@ -355,4 +362,43 @@ export function riskToTailwindBg(_score: number): string {
 /** 히트맵 셀 텍스트 색상 (다크모드 고정) */
 export function riskToTextColor(): string {
   return "text-slate-200";
+}
+
+// ─── 섹션 1: 언론사 통계 (뉴스 기사 전용) ───────────────────────────────────
+
+/** originallink에서 2-level 도메인 추출 (e.g. news.naver.com → naver.com) */
+function extractDomain(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    const parts = hostname.split(".");
+    return parts.length >= 2 ? parts.slice(-2).join(".") : hostname;
+  } catch {
+    return "";
+  }
+}
+
+/** 뉴스 기사 언론사(도메인)별 기사 수 (상위 topN개 + 나머지 합산) */
+export function buildMediaOutletStats(
+  articles: AnalyzedArticle[],
+  topN = 9
+): MediaOutletCount[] {
+  const freq = new Map<string, number>();
+
+  for (const a of articles) {
+    if (a.source_type !== "news") continue;
+    const url = a.originallink ?? a.link ?? "";
+    if (!url) continue;
+    const domain = extractDomain(url);
+    if (!domain) continue;
+    freq.set(domain, (freq.get(domain) ?? 0) + 1);
+  }
+
+  const sorted = Array.from(freq.entries())
+    .sort((a, b) => b[1] - a[1]);
+
+  const top = sorted.slice(0, topN).map(([domain, count]) => ({ domain, count }));
+  const rest = sorted.slice(topN).reduce((s, [, c]) => s + c, 0);
+  if (rest > 0) top.push({ domain: "기타", count: rest });
+
+  return top;
 }

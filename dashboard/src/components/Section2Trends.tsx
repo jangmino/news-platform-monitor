@@ -28,9 +28,9 @@ export function Section2Trends({ articles }: Section2TrendsProps) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">이슈 클러스터 버블차트</CardTitle>
+            <CardTitle className="text-base">이슈 클러스터 리스크 랭킹</CardTitle>
             <p className="text-xs text-muted-foreground">
-              x=출현 빈도, y=평균 리스크, 크기=출현 빈도, 색=정책영역 · 우상단일수록 핵심 이슈
+              리스크 점수 순 정렬 · 색=정책영역 · 건수=출현 빈도
             </p>
           </CardHeader>
           <CardContent>

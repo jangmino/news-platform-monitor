@@ -1,5 +1,5 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { PlatformSentimentBar } from "@/charts/PlatformSentimentBar";
 import {
   buildPlatformCards,
@@ -23,10 +23,10 @@ interface Section4PlatformsProps {
   onPlatformSelect: (platform: string | null) => void;
 }
 
-function riskVariant(score: number): "destructive" | "secondary" | "outline" {
-  if (score >= 70) return "destructive";
-  if (score >= 40) return "secondary";
-  return "outline";
+function riskStyle(score: number): { label: string; color: string; bg: string; border: string } {
+  if (score >= 70) return { label: "고위험", color: "#ef4444", bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.4)" };
+  if (score >= 50) return { label: "주의",   color: "#f59e0b", bg: "rgba(245,158,11,0.15)", border: "rgba(245,158,11,0.4)" };
+  return               { label: "관심",   color: "#64748b", bg: "rgba(100,116,139,0.15)", border: "rgba(100,116,139,0.3)" };
 }
 
 function platformGroup(platform: string): "domestic" | "foreign" | "other" {
@@ -42,7 +42,7 @@ export function Section4Platforms({
   onPlatformSelect,
 }: Section4PlatformsProps) {
   const allCards = buildPlatformCards(articles);
-  const sentimentStats = buildPlatformSentimentStats(articles, 12);
+  const sentimentStats = buildPlatformSentimentStats(articles, 7);
 
   const cards = selectedPlatform
     ? allCards.filter((c) => c.platform === selectedPlatform)
@@ -71,7 +71,7 @@ export function Section4Platforms({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">플랫폼별 감성 분포</CardTitle>
-            <p className="text-xs text-muted-foreground">기사 수 상위 12개 플랫폼 · 스택 = 감성 비율</p>
+            <p className="text-xs text-muted-foreground">기사 수 상위 플랫폼 · 감성 비율(%) 비교</p>
           </CardHeader>
           <CardContent>
             <PlatformSentimentBar data={sentimentStats} />
@@ -136,6 +136,60 @@ export function Section4Platforms({
   );
 }
 
+function PlatformCardItem({ card }: { card: PlatformCard }) {
+  const [expanded, setExpanded] = useState(false);
+  const rs = riskStyle(card.avgRisk);
+  const keywords = card.topKeywords.filter(
+    (kw) => kw.toLowerCase() !== card.platform.toLowerCase()
+  );
+
+  return (
+    <Card className="flex flex-col overflow-hidden">
+      {/* 위험도 색상 상단 바 */}
+      <div className="h-1 w-full" style={{ backgroundColor: rs.color, opacity: 0.7 }} />
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-base">{card.platform}</CardTitle>
+          <span
+            className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+            style={{ color: rs.color, backgroundColor: rs.bg, border: `1px solid ${rs.border}` }}
+          >
+            평균 리스크 {card.avgRisk}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {card.articleCount}건 · 최고 {card.maxRisk}점
+        </p>
+      </CardHeader>
+      <CardContent className="flex-1 space-y-3">
+        <div className="flex flex-wrap gap-1">
+          {keywords.map((kw) => (
+            <span
+              key={kw}
+              className="inline-block px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded text-[11px]"
+            >
+              {kw}
+            </span>
+          ))}
+        </div>
+        {card.sampleSummary && (
+          <div className="border-l-2 border-border pl-2">
+            <p className={`text-xs text-muted-foreground ${expanded ? "" : "line-clamp-3"}`}>
+              {card.sampleSummary}
+            </p>
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1 text-[11px] text-blue-400 hover:text-blue-300"
+            >
+              {expanded ? "접기 ↑" : "더 보기 ↓"}
+            </button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PlatformGroup({ label, cards }: { label: string; cards: PlatformCard[] }) {
   return (
     <div>
@@ -146,36 +200,7 @@ function PlatformGroup({ label, cards }: { label: string; cards: PlatformCard[] 
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {cards.map((card) => (
-          <Card key={card.platform} className="flex flex-col">
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-base">{card.platform}</CardTitle>
-                <Badge variant={riskVariant(card.maxRisk)} className="shrink-0">
-                  리스크 {card.maxRisk}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {card.articleCount}건 · 평균 {card.avgRisk}점
-              </p>
-            </CardHeader>
-            <CardContent className="flex-1 space-y-3">
-              <div className="flex flex-wrap gap-1">
-                {card.topKeywords.map((kw) => (
-                  <span
-                    key={kw}
-                    className="inline-block px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded text-[11px]"
-                  >
-                    {kw}
-                  </span>
-                ))}
-              </div>
-              {card.sampleSummary && (
-                <p className="text-xs text-muted-foreground line-clamp-3 border-l-2 border-border pl-2">
-                  {card.sampleSummary}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <PlatformCardItem key={card.platform} card={card} />
         ))}
       </div>
     </div>

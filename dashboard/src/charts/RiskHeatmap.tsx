@@ -16,8 +16,15 @@ export function RiskHeatmap({
   selectedPlatform,
   onPlatformSelect,
 }: RiskHeatmapProps) {
-  const allPlatforms = [...platforms, "기타"];
   const allDomains = [...domains, "기타"];
+
+  // 모든 도메인에서 count=0인 플랫폼 제거
+  const activePlatforms = [...platforms, "기타"].filter((platform) =>
+    allDomains.some(
+      (domain) => cells.find((c) => c.platform === platform && c.domain === domain && c.count > 0)
+    )
+  );
+  const allPlatforms = activePlatforms;
 
   function getCell(platform: string, domain: string): HeatmapCell {
     return (
