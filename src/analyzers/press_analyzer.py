@@ -24,6 +24,12 @@ from src.utils.file_io import (
 
 
 _MIN_CONTENT_LENGTH = 50  # 이 미만이면 skipped
+_RETRY_DELAYS = [5, 15, 45]  # 일시적 오류(503/429) 재시도 간격(초)
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    msg = str(exc)
+    return any(tok in msg for tok in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED"))
 
 _PROMPT = """다음 보도자료를 분석하세요. 반드시 원문에 있는 내용만 기반으로 하고, 원문에 없는 내용을 추가하지 마세요.
 
@@ -247,7 +253,22 @@ def run_press_analysis(config: dict | None = None, force: bool = False) -> dict:
         print(f"  [{i}/{total}] {title_preview}... ", end="", flush=True)
 
         try:
-            analysis = _analyze_single(client, model, article, valid_platforms, valid_domains)
+            analysis = None
+            last_exc: Exception | None = None
+            for attempt in range(len(_RETRY_DELAYS) + 1):
+                try:
+                    analysis = _analyze_single(client, model, article, valid_platforms, valid_domains)
+                    break
+                except Exception as e:
+                    last_exc = e
+                    if attempt < len(_RETRY_DELAYS) and _is_transient_error(e):
+                        delay = _RETRY_DELAYS[attempt]
+                        print(f"일시 오류, {delay}s 후 재시도({attempt + 1}/{len(_RETRY_DELAYS)})... ", end="", flush=True)
+                        time.sleep(delay)
+                        continue
+                    raise
+            assert analysis is not None
+
             result_article = {**article, **analysis}
             analyzed_articles.append(result_article)
 

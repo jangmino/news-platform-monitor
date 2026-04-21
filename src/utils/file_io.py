@@ -58,12 +58,15 @@ def atomic_write(data: list | dict, path: Path) -> None:
 def copy_to_dashboard(src: Path, filename: str) -> None:
     """분석 결과를 대시보드 public/data/ 에 복사한다.
 
-    dashboard 디렉토리가 없으면 조용히 건너뛴다.
+    dashboard 디렉토리 자체가 없으면 조용히 건너뛴다.
+    dashboard/public/data 하위 디렉토리는 없으면 생성한다.
     """
     project_root = Path(__file__).resolve().parents[2]
-    dst_dir = project_root / "dashboard" / "public" / "data"
-    if not dst_dir.exists():
+    dashboard_root = project_root / "dashboard"
+    if not dashboard_root.exists():
         return
+    dst_dir = dashboard_root / "public" / "data"
+    ensure_dir(dst_dir)
     dst = dst_dir / filename
     shutil.copy2(src, dst)
     print(f"대시보드 복사 완료: {dst}")
