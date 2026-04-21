@@ -30,3 +30,7 @@ dashboard/dist/
 dashboard/public/data/press_analysis.json
 dashboard/public/data/news_analysis.json
 dashboard/public/data/combined_recommendations.json
+# 프로젝트 표준은 bun (bun.lock). npm/pnpm/yarn 실행 시 생성되는 락파일 제외
+dashboard/package-lock.json
+dashboard/pnpm-lock.yaml
+dashboard/yarn.lock
