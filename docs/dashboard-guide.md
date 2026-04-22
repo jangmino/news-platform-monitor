@@ -65,14 +65,14 @@ python -m src.cli run-all
 **[방법 B] 단계별 개별 실행**
 
 ```bash
-python -m src collect --news      # 1. 뉴스 수집
-python -m src preprocess          # 2. 뉴스 전처리
-python -m src analyze-news        # 3. 뉴스 LLM 분석
+python -m src.cli collect --news           # 1. 뉴스 수집
+python -m src.cli preprocess               # 2. 뉴스 전처리
+python -m src.cli analyze-news             # 3. 뉴스 LLM 분석
 
-python -m src collect --rss       # 4. 보도자료 수집
-python -m src analyze-rss         # 5. 보도자료 LLM 분석
+python -m src.cli collect --rss            # 4. 보도자료 수집
+python -m src.cli analyze-rss              # 5. 보도자료 LLM 분석
 
-python -m src generate-recommendations  # 6. 통합 제언 생성
+python -m src.cli generate-recommendations # 6. 통합 제언 생성
 
 python -m src.cli status
 ```
@@ -176,14 +176,14 @@ python -m src.cli run-all
 **[방법 B] 단계별 개별 실행**
 
 ```bat
-python -m src collect --news      :: 1. 뉴스 수집
-python -m src preprocess          :: 2. 뉴스 전처리
-python -m src analyze-news        :: 3. 뉴스 LLM 분석
+python -m src.cli collect --news           :: 1. 뉴스 수집
+python -m src.cli preprocess               :: 2. 뉴스 전처리
+python -m src.cli analyze-news             :: 3. 뉴스 LLM 분석
 
-python -m src collect --rss       :: 4. 보도자료 수집
-python -m src analyze-rss         :: 5. 보도자료 LLM 분석
+python -m src.cli collect --rss            :: 4. 보도자료 수집
+python -m src.cli analyze-rss              :: 5. 보도자료 LLM 분석
 
-python -m src generate-recommendations  :: 6. 통합 제언 생성
+python -m src.cli generate-recommendations :: 6. 통합 제언 생성
 
 python -m src.cli status
 ```
@@ -249,14 +249,14 @@ npm run dev
 
 ### 산출 기준
 
-| 점수 범위 | 수준 | 의미 | 예시 상황 |
-|-----------|------|------|-----------|
-| 0 – 30 | 관심 | 중립적 정보 제공, 정책 발표 | 새 서비스 출시 보도, 제도 안내 공문, 정책 설명 자료 |
-| 31 – 60 | 주의 | 규제 논의, 제도 개선, 조사 착수 | 국회 입법 논의, 공정위 실태조사 착수, 소비자단체 민원 제기 |
-| 61 – 80 | 고위험 | 과징금·처분·갈등 본격화 | 공정위 과징금 부과, 방통위 시정명령, 노동청 특별 점검 |
-| 81 – 100 | 고위험 | 심각한 법적 제재, 긴급 규제, 소비자 피해 | 검찰 수사 개시, 긴급 영업정지, 대규모 집단 피해 사건 |
+| 점수 범위 | AI 산출 기준 (프롬프트 지침) | 예시 상황 |
+|-----------|------|-----------|
+| 0 – 30 | 중립적 정보 제공, 정책 발표 | 새 서비스 출시 보도, 제도 안내 공문, 정책 설명 자료 |
+| 31 – 60 | 규제 논의, 제도 개선, 조사 착수 | 국회 입법 논의, 공정위 실태조사 착수, 소비자단체 민원 제기 |
+| 61 – 80 | 과징금·처분·갈등 본격화 | 공정위 과징금 부과, 방통위 시정명령, 노동청 특별 점검 |
+| 81 – 100 | 심각한 법적 제재, 긴급 규제, 소비자 피해 | 검찰 수사 개시, 긴급 영업정지, 대규모 집단 피해 사건 |
 
-> **고위험 기준선은 70점**입니다. 대시보드의 빨간 배지, 히트맵 진한 색상, 클러스터 랭킹 기준선 모두 70점을 임계값으로 사용합니다.
+> **대시보드 표시 기준선은 70점**입니다. AI가 점수를 산출할 때는 위 4구간(30/60/80) 기준을 사용하고, 대시보드 UI는 별도로 70점을 임계값으로 삼아 빨간 배지·히트맵 강조·클러스터 랭킹 기준선을 표시합니다.
 
 ---
 
@@ -281,10 +281,10 @@ npm run dev
 
 대시보드는 실행 시점의 JSON 파일을 읽어 표시합니다. 백엔드 파이프라인을 다시 실행한 뒤에는 **브라우저를 새로고침(F5 또는 Cmd+R)** 하면 최신 데이터가 반영됩니다.
 
-#### 분석 진행률 표시줄
+#### 분석 진행률 표시
 
-헤더 하단에 표시되는 `분석 완료 N건 / 전체 N건` 바는 백엔드가 처리한 분석 진행률을 나타냅니다.  
-진행률이 100%에 미치지 못하는 경우, 미분석 항목이 남아 있으므로 `python -m src.cli analyze`를 다시 실행하면 됩니다.
+헤더 우측에 `N / N건 분석`으로 표시됩니다. 분석된 건수 / 전체 수집 건수를 나타냅니다.  
+두 숫자가 일치하지 않으면 미분석 항목이 남아 있는 것이므로 `python -m src.cli analyze-press` 또는 `python -m src.cli analyze-news`를 다시 실행하면 됩니다.
 
 ---
 
@@ -394,7 +394,8 @@ X축은 날짜(MM-DD), Y축은 기사 건수입니다.
 
 **표시 조건**
 - 키워드 클라우드에서 특정 키워드를 클릭하면 해당 키워드 관련 기사만 표시됩니다.
-- 필터가 없을 경우 리스크 70점 이상 고위험 기사가 우선 표시됩니다.
+- 필터가 없을 경우 리스크 70점 이상 고위험 기사 상위 20건이 표시됩니다.
+- 키워드 필터가 적용된 경우에도 관련 기사 상위 20건으로 제한됩니다.
 
 ---
 
@@ -417,7 +418,7 @@ X축은 날짜(MM-DD), Y축은 기사 건수입니다.
 
 #### 플랫폼별 이슈 카드
 
-국내 플랫폼(13개)·해외 플랫폼(6개)·기타로 분류된 각 플랫폼의 이슈 요약 카드입니다.
+국내 플랫폼(13개)·해외 플랫폼(12개)·기타로 분류된 각 플랫폼의 이슈 요약 카드입니다.
 
 | 카드 요소 | 의미 |
 |-----------|------|
@@ -426,7 +427,7 @@ X축은 날짜(MM-DD), Y축은 기사 건수입니다.
 | 기사 수 | 해당 플랫폼이 언급된 기사 건수 |
 | 최고 리스크 | 해당 플랫폼 관련 기사 중 가장 높은 리스크 스코어 |
 | 키워드 태그 | 해당 플랫폼 관련 기사에서 자주 등장한 상위 5개 키워드 |
-| 요약 텍스트 | LLM이 생성한 해당 플랫폼 이슈 요약 |
+| 요약 텍스트 | 해당 플랫폼 관련 기사 중 최고 리스크 기사의 LLM 요약 |
 
 #### AI 정책 제언 카드
 
