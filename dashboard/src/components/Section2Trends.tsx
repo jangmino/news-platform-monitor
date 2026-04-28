@@ -28,9 +28,9 @@ export function Section2Trends({ articles }: Section2TrendsProps) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">이슈 클러스터 리스크 랭킹</CardTitle>
+            <CardTitle className="text-base">키워드별 리스크 랭킹</CardTitle>
             <p className="text-xs text-muted-foreground">
-              리스크 점수 순 정렬 · 색=정책영역 · 건수=출현 빈도
+              LLM 추출 키워드 기준 집계 · 평균 리스크 점수 순 · 건수=출현 빈도
             </p>
           </CardHeader>
           <CardContent>

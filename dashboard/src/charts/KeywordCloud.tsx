@@ -32,9 +32,26 @@ export function KeywordCloud({ keywords, selectedKeyword, onKeywordClick }: Keyw
     onKeywordClick(selectedKeyword === keyword ? null : keyword);
   }
 
+  const legendDomains = Object.entries(DOMAIN_COLORS);
+
   return (
-    <div className="flex flex-wrap gap-2 items-baseline justify-center p-4 min-h-[160px]">
-      {keywords.map(({ keyword, count, dominantDomain }) => {
+    <div className="space-y-3">
+      {/* 정책영역 색상 범례 */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-1.5 rounded bg-slate-900/40 border border-slate-800/60">
+        <span className="text-[10px] text-slate-500 mr-1">정책영역</span>
+        {legendDomains.map(([domain, color]) => (
+          <div key={domain} className="flex items-center gap-1">
+            <span
+              className="inline-block w-2 h-2 rounded-full"
+              style={{ backgroundColor: color }}
+            />
+            <span className="text-[11px] text-slate-300">{domain}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-baseline justify-center p-4 min-h-[160px]">
+        {keywords.map(({ keyword, count, dominantDomain }) => {
         const color = DOMAIN_COLORS[dominantDomain] ?? DOMAIN_COLORS["기타"];
         const isSelected = selectedKeyword === keyword;
         const isOther = selectedKeyword && !isSelected;
@@ -60,6 +77,7 @@ export function KeywordCloud({ keywords, selectedKeyword, onKeywordClick }: Keyw
           </span>
         );
       })}
+      </div>
     </div>
   );
 }
