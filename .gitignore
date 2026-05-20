@@ -34,3 +34,5 @@ dashboard/public/data/combined_recommendations.json
 dashboard/package-lock.json
 dashboard/pnpm-lock.yaml
 dashboard/yarn.lock
+
+presentations/
