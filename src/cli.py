@@ -140,57 +140,72 @@ def cmd_run_all(args):
     print("========== 전체 파이프라인 실행 ==========\n")
     cmd_collect(argparse.Namespace(rss=True, news=True))
     cmd_preprocess(argparse.Namespace(news_only=True))
-    cmd_analyze(argparse.Namespace(force=False))
+    cmd_analyze_press(argparse.Namespace(force=False))
     cmd_analyze_news(argparse.Namespace(force=False))
     cmd_generate_recommendations(argparse.Namespace(force=False))
     print("\n========== 파이프라인 완료 ==========")
 
 
 def cmd_status(args):
-    """수집·분석 상태 요약."""
+    """수집·분석 상태 요약 (spec 003/004 스키마)."""
     from src.utils.file_io import (
-        load_json, processed_dir, analyzed_dir, scored_dir, reports_dir,
+        load_json, processed_dir, analyzed_dir,
         raw_rss_dir, raw_news_dir,
     )
-    from pathlib import Path
-    import glob
+    from collections import Counter
 
-    # 수집 현황
+    def _articles(d):
+        return d.get("articles", []) if isinstance(d, dict) else []
+
+    def _status_summary(articles):
+        c = Counter(a.get("status") for a in articles)
+        return ", ".join(f"{k} {v}건" for k, v in c.items()) if c else "—"
+
+    def _fmt_time(s):
+        return s[:19].replace("T", " ") if isinstance(s, str) and s else "—"
+
+    # 수집
     rss_files = list(raw_rss_dir().glob("*.json"))
     news_files = list(raw_news_dir().glob("*.json"))
     rss_count = sum(len(load_json(f)) for f in rss_files)
     news_count = sum(len(load_json(f)) for f in news_files)
 
-    # 전처리
-    processed_path = processed_dir() / "articles.json"
-    processed_data = load_json(processed_path)
-    processed_count = len(processed_data) if isinstance(processed_data, list) else 0
+    # 전처리 (뉴스 전용 — 보도자료는 raw에서 직접 분석)
+    processed = load_json(processed_dir() / "articles.json")
+    processed_news = (
+        sum(1 for a in processed if isinstance(a, dict) and a.get("source_type") == "news")
+        if isinstance(processed, list) else 0
+    )
 
-    # 분석
-    analyses_path = analyzed_dir() / "analyses.json"
-    analyses = load_json(analyses_path)
-    analyses = analyses if isinstance(analyses, list) else []
-    completed = sum(1 for a in analyses if a.get("status") == "completed")
-    failed = sum(1 for a in analyses if a.get("status") == "failed")
-    skipped = sum(1 for a in analyses if a.get("status") == "skipped")
+    # 보도자료 분석
+    press = load_json(analyzed_dir() / "press_analysis.json")
+    press_total = press.get("total_count", 0) if isinstance(press, dict) else 0
+    press_recs = len(press.get("policy_recommendations", [])) if isinstance(press, dict) else 0
 
-    # 스코어링
-    clusters_path = scored_dir() / "clusters.json"
-    clusters = load_json(clusters_path)
-    cluster_count = len(clusters) if isinstance(clusters, list) else 0
+    # 뉴스 분석
+    news = load_json(analyzed_dir() / "news_analysis.json")
+    news_total = news.get("total_count", 0) if isinstance(news, dict) else 0
 
-    # 리포트
-    report_files = list(reports_dir().glob("briefing_*.md"))
+    # 통합 정책 제언
+    combined = load_json(analyzed_dir() / "combined_recommendations.json")
+    combined_recs = (
+        len(combined.get("policy_recommendations", [])) if isinstance(combined, dict) else 0
+    )
 
     print("=== 시스템 상태 ===")
-    print(f"수집: RSS {rss_count}건 ({len(rss_files)} 파일), 뉴스 {news_count}건 ({len(news_files)} 파일)")
-    print(f"전처리: {processed_count}건 (중복 제거 후)")
-    print(f"분석: 완료 {completed}건, 실패 {failed}건, 스킵 {skipped}건")
-    print(f"클러스터: {cluster_count}개")
-    print(f"리포트: {len(report_files)}개")
-    if report_files:
-        latest = sorted(report_files)[-1]
-        print(f"최근 리포트: {latest.name}")
+    print(f"수집  : RSS {rss_count}건 ({len(rss_files)} 파일), 뉴스 {news_count}건 ({len(news_files)} 파일)")
+    print(f"전처리: 뉴스 {processed_news}건 (중복 제거 후, 보도자료는 전처리 우회)")
+    print()
+    print("[보도자료 분석]")
+    print(f"  총 {press_total}건 · {_status_summary(_articles(press))}")
+    print(f"  정책 제언 {press_recs}개 · 생성 {_fmt_time(press.get('generated_at') if isinstance(press, dict) else '')}")
+    print()
+    print("[뉴스 분석]")
+    print(f"  총 {news_total}건 · {_status_summary(_articles(news))}")
+    print(f"  생성 {_fmt_time(news.get('generated_at') if isinstance(news, dict) else '')}")
+    print()
+    print("[통합 정책 제언]")
+    print(f"  {combined_recs}개 · 생성 {_fmt_time(combined.get('generated_at') if isinstance(combined, dict) else '')}")
 
 
 def main():
