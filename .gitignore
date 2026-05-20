@@ -27,6 +27,7 @@ Thumbs.db
 # Dashboard
 dashboard/node_modules/
 dashboard/dist/
+dashboard/*.tsbuildinfo
 dashboard/public/data/press_analysis.json
 dashboard/public/data/news_analysis.json
 dashboard/public/data/combined_recommendations.json

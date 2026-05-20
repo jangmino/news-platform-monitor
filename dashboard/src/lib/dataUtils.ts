@@ -28,20 +28,47 @@ function toISODate(dateStr: string): string {
 
 // ─── 날짜 범위 필터 ──────────────────────────────────────────────────────────
 
-/** days가 null이면 전체, 숫자면 최근 N일 기사만 반환 */
+export interface DateRange {
+  start: string | null; // "YYYY-MM-DD" inclusive
+  end: string | null;   // "YYYY-MM-DD" inclusive
+}
+
+/** start/end가 모두 null이면 전체 반환. 일자 비교는 ISO 문자열로 수행 */
 export function filterByDateRange(
   articles: AnalyzedArticle[],
-  days: number | null
+  range: DateRange
 ): AnalyzedArticle[] {
-  if (!days) return articles;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
+  const { start, end } = range;
+  if (!start && !end) return articles;
   return articles.filter((a) => {
-    const ds = articleDate(a);
-    if (!ds) return false;
-    const d = new Date(ds);
-    return !isNaN(d.getTime()) && d >= cutoff;
+    const iso = toISODate(articleDate(a));
+    if (iso === "unknown") return false;
+    if (start && iso < start) return false;
+    if (end && iso > end) return false;
+    return true;
   });
+}
+
+/** 데이터의 최소/최대 일자(ISO). 유효 일자가 없으면 null */
+export function getArticleDateBounds(
+  articles: AnalyzedArticle[]
+): { min: string; max: string } | null {
+  let min = "";
+  let max = "";
+  for (const a of articles) {
+    const iso = toISODate(articleDate(a));
+    if (iso === "unknown") continue;
+    if (!min || iso < min) min = iso;
+    if (!max || iso > max) max = iso;
+  }
+  return min && max ? { min, max } : null;
+}
+
+/** 기준일로부터 N일 전 ISO 일자 (기준일 포함 N일 구간의 시작점) */
+export function shiftDays(isoDate: string, days: number): string {
+  const d = new Date(isoDate);
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
 }
 
 // ─── 섹션 1: 히트맵 ────────────────────────────────────────────────────────

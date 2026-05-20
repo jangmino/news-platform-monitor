@@ -7,7 +7,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Cell,
   LabelList,
 } from "recharts";
 import { SENTIMENT_COLORS } from "@/lib/dataUtils";
