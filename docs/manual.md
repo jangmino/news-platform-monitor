@@ -573,13 +573,22 @@ python -m src.cli status
 
 ```
 === 시스템 상태 ===
-수집: RSS 245건 (12 파일), 뉴스 1,820건 (35 파일)
-전처리: 542건 (중복 제거 후)
-분석: 완료 538건, 실패 2건, 스킵 2건
-클러스터: 24개
-리포트: 3개
-최근 리포트: briefing_2026-04-25.md
+수집  : RSS 878건 (1 파일), 뉴스 1317건 (37 파일)
+전처리: 뉴스 247건 (중복 제거 후, 보도자료는 전처리 우회)
+
+[보도자료 분석]
+  총 878건 · analyzed 878건
+  정책 제언 3개 · 생성 2026-05-20 14:38:03
+
+[뉴스 분석]
+  총 247건 · analyzed 247건
+  생성 2026-05-20 14:51:22
+
+[통합 정책 제언]
+  3개 · 생성 2026-05-20 07:44:09
 ```
+
+> **참고**: 보도자료(RSS)는 전처리 단계(`processed/articles.json`)를 거치지 않고 `raw/rss/press_data.json`에서 바로 분석됩니다. 따라서 전처리 건수는 뉴스만 집계됩니다.
 
 ---
 
@@ -666,7 +675,7 @@ npm run dev
 
 | 요소 | 설명 |
 |------|------|
-| **날짜 범위 필터** | "전체 / 최근 7일 / 30일 / 90일" 버튼. 모든 섹션이 동시에 갱신됨 |
+| **날짜 범위 필터** | 두 방식 제공. ① 프리셋 버튼 "전체 / 최근 7일 / 30일 / 90일" — 기준점은 **데이터의 가장 최근 일자** (오늘이 아님). ② 시작일·종료일 직접 입력 — 임의 구간 지정 가능. 모든 섹션이 동시에 갱신됨. 선택 기간에 데이터가 없으면 "전체 기간으로 보기" 버튼이 표시됨 |
 | **분석 진행률** | `N/N건 분석` 표시. 두 숫자가 다르면 미분석 항목 존재 (`analyze-press`/`analyze-news` 재실행) |
 
 #### 섹션 1 — 개요 (Overview)
@@ -969,11 +978,11 @@ copy config.yaml backup\config_2026-04-27.yaml
 python -m src.cli status
 ```
 
-수집·전처리·분석 건수 및 최근 리포트가 출력됩니다.
+수집·전처리·분석 건수 및 정책 제언 생성 시각이 출력됩니다.
 
 #### 분석 실패 항목 확인
 
-`data\analyzed\analyses.json` 에서 `status: "failed"` 인 항목을 검색하면 어떤 기사 분석이 실패했는지 확인할 수 있습니다 (대부분 Gemini 일시 오류로 다음 실행 시 자동 복구).
+`data\analyzed\press_analysis.json` 또는 `news_analysis.json` 의 `articles[]` 안에서 `"status": "failed"` 인 항목을 검색하면 어떤 기사 분석이 실패했는지 확인할 수 있습니다 (대부분 Gemini 일시 오류로 다음 실행 시 자동 복구). `status` 값은 `analyzed` / `failed` / `skipped` / `parse_error` 중 하나입니다.
 
 #### Gemini API 사용량
 
@@ -1024,12 +1033,13 @@ news-platform-monitor/
 │
 ├── data/                        # 산출 데이터 (커밋 안 됨)
 │   ├── raw/
-│   │   ├── rss/                 # RSS 보도자료 원본 JSON
+│   │   ├── rss/                 # RSS 보도자료 원본 JSON (press_data.json)
 │   │   └── news/                # 네이버 뉴스 원본 JSON
-│   ├── processed/articles.json  # 통합·태깅 완료
-│   ├── analyzed/                # LLM 분석 결과
-│   ├── scored/                  # 클러스터링 결과
-│   └── reports/                 # 마크다운 브리핑 리포트
+│   ├── processed/articles.json  # 뉴스 중복제거·태깅 결과 (보도자료는 거치지 않음)
+│   └── analyzed/                # LLM 분석 결과
+│       ├── press_analysis.json          # 보도자료 분석 + 정책 제언
+│       ├── news_analysis.json           # 뉴스 분석
+│       └── combined_recommendations.json # 보도자료+뉴스 통합 제언
 │
 ├── dashboard/                   # 프론트엔드 (별도 프로젝트)
 │   ├── package.json
@@ -1079,20 +1089,23 @@ news-platform-monitor/
 
 ### `data/processed/articles.json`
 
-전처리(중복 제거 + 태깅)가 완료된 통합 기사 목록.
+전처리(중복 제거 + 태깅)가 완료된 **뉴스** 기사 목록. 보도자료는 이 파일을 거치지 않고 `raw/rss/press_data.json` 에서 직접 분석됩니다.
 
 ```json
 [
   {
-    "id": "abc123...",
-    "source": "press" | "news",
+    "id": "https://...",
     "title": "기사 제목",
+    "content": "본문",
     "url": "https://...",
-    "published_at": "2026-04-25T09:00:00+09:00",
-    "summary": "원문 요약 또는 발췌",
-    "policy_domains": ["공정거래", "소비자보호"],
-    "platforms": ["네이버", "쿠팡"],
-    "institutions": ["공정거래위원회"]
+    "source_type": "news",
+    "source_name": "Naver 뉴스",
+    "published_at": "Mon, 25 Apr 2026 09:00:00 +0900",
+    "collected_at": "...",
+    "platform_tags": ["네이버", "쿠팡"],
+    "institution_tags": ["공정거래위원회"],
+    "query_used": "수집 시 사용된 정책 키워드",
+    "category": "공정거래,소비자보호"
   }
 ]
 ```
@@ -1103,22 +1116,43 @@ LLM 분석 결과. 각 기사마다 요약·감성·리스크·키워드 등이 
 
 ```json
 {
-  "generated_at": "2026-04-25T10:30:00Z",
+  "generated_at": "2026-04-25T10:30:00",
   "total_count": 87,
   "analyzed_count": 85,
-  "analyses": [
+  "articles": [
     {
-      "id": "abc123...",
-      "status": "completed",
+      "title": "기사 제목",
+      "date": "Mon, 25 Apr 2026 09:00:00 GMT",
+      "source_type": "press",
+      "status": "analyzed",
       "summary": "AI 요약 (3-5문장)",
-      "sentiment": "negative" | "neutral" | "positive",
+      "sentiment": "긍정" | "부정" | "중립",
       "risk_score": 75,
       "keywords": ["자사우대", "과징금", "온라인플랫폼"],
       "policy_domains": ["공정거래"],
-      "platforms": ["네이버"]
+      "platforms": ["네이버"],
+      "confidence": 0.9
     }
   ],
-  "policy_recommendations": [ ... ]
+  "policy_recommendations": [
+    { "title": "...", "description": "..." }
+  ]
+}
+```
+
+> `status` 값은 `analyzed` (정상) / `failed` (재시도 필요) / `skipped` (조건 미달) / `parse_error` 중 하나입니다. `policy_recommendations` 필드는 `press_analysis.json`에만 포함됩니다 (보도자료 기반 단독 제언).
+
+### `data/analyzed/combined_recommendations.json`
+
+보도자료 + 뉴스 통합 정책 제언. 분석 건수(`source_counts`)가 직전 실행과 동일하면 LLM 호출을 아끼고 재사용합니다 — 강제 재생성은 `--force` 옵션 사용.
+
+```json
+{
+  "generated_at": "2026-04-25T10:35:00+00:00",
+  "source_counts": { "press": 878, "news": 247 },
+  "policy_recommendations": [
+    { "title": "...", "description": "..." }
+  ]
 }
 ```
 

@@ -6,9 +6,9 @@ KISDI 디지털플랫폼 정책포럼을 위한 뉴스·보도자료 자동 수�
 
 - 7개 정부 기관 보도자료 자동 수집 (RSS 피드)
 - Naver 뉴스 기사 자동 수집 (정책 키워드 기반)
-- Google Gemini API 기반 분석 (요약, 감성, 정책영역 분류)
-- 리스크 스코어링 및 급상승 이슈 탐지
-- 주간 브리핑 리포트 및 리스크 히트맵 자동 생성
+- Google Gemini API 기반 분석 (요약, 감성, 정책영역 분류, 리스크 점수)
+- 보도자료/뉴스 통합 정책 제언 자동 생성
+- 웹 대시보드를 통한 시각화 (플랫폼·키워드·시계열 필터링)
 
 ## 설치
 
@@ -49,13 +49,13 @@ export GEMINI_API_KEY="..."
 
 ```bash
 # 개별 단계 실행
-python -m src.cli collect          # 데이터 수집 (RSS + 뉴스)
-python -m src.cli collect --rss    # RSS 보도자료만
-python -m src.cli collect --news   # Naver 뉴스만
-python -m src.cli preprocess       # 전처리 (중복 제거, 태깅)
-python -m src.cli analyze          # LLM 분석
-python -m src.cli score            # 리스크 스코어링
-python -m src.cli report           # 브리핑 리포트 생성
+python -m src.cli collect                    # 데이터 수집 (RSS + 뉴스)
+python -m src.cli collect --rss              # RSS 보도자료만
+python -m src.cli collect --news             # Naver 뉴스만
+python -m src.cli preprocess                 # 전처리 (뉴스 중복 제거 + 태깅)
+python -m src.cli analyze-press              # 보도자료 LLM 분석 + 정책 제언
+python -m src.cli analyze-news               # 뉴스 LLM 분석
+python -m src.cli generate-recommendations   # 통합 정책 제언 생성
 
 # 전체 파이프라인 실행
 python -m src.cli run-all
@@ -66,8 +66,14 @@ python -m src.cli status
 
 ## 결과물
 
-실행 후 `data/reports/` 디렉토리에서 확인:
+실행 후 `data/analyzed/` 디렉토리에서 확인:
 
-- `briefing_YYYY-MM-DD.md` — 주간 브리핑 (Markdown)
-- `briefing_YYYY-MM-DD.json` — 브리핑 데이터 (JSON)
-- `heatmap_YYYY-MM-DD.png` — 리스크 히트맵 이미지
+- `press_analysis.json` — 보도자료 분석 결과 (요약, 감성, 리스크, 정책 제언)
+- `news_analysis.json` — 뉴스 분석 결과
+- `combined_recommendations.json` — 보도자료+뉴스 통합 정책 제언
+
+위 파일은 `dashboard/public/data/` 에 자동 복사되어 대시보드에서 시각화됩니다.
+
+```bash
+cd dashboard && npm install && npm run dev   # http://localhost:5173
+```
